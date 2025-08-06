@@ -43,14 +43,14 @@ func (t *Template) renderOutbounds(metadata M.Metadata, options *boxOption.Optio
 			Type:    C.TypeSelector,
 			Options: common.Ptr(common.PtrValueOrDefault(t.CustomSelector)),
 		},
+		{
+			Tag:     blockTag,
+			Type:    C.TypeBlock,
+			Options: &boxOption.StubOptions{},
+		},
 	}
 	if disableRuleAction {
 		options.Outbounds = append(options.Outbounds,
-			boxOption.Outbound{
-				Tag:     blockTag,
-				Type:    C.TypeBlock,
-				Options: &boxOption.StubOptions{},
-			},
 			boxOption.Outbound{
 				Tag:     DNSTag,
 				Type:    C.TypeDNS,
@@ -185,14 +185,14 @@ func (t *Template) renderOutbounds(metadata M.Metadata, options *boxOption.Optio
 				groupOutboundPerSubscription.Options = &selectorOptions
 				selectorOptions.Outbounds = common.Uniq(append(selectorOptions.Outbounds, subscriptionTags...))
 				if len(selectorOptions.Outbounds) == 0 {
-					continue
+					selectorOptions.Outbounds = append(selectorOptions.Outbounds, blockTag)
 				}
 			case C.TypeURLTest:
 				urltestOptions := common.PtrValueOrDefault(extraGroup.CustomURLTest)
 				groupOutboundPerSubscription.Options = &urltestOptions
 				urltestOptions.Outbounds = common.Uniq(append(urltestOptions.Outbounds, subscriptionTags...))
 				if len(urltestOptions.Outbounds) == 0 {
-					continue
+					urltestOptions.Outbounds = append(urltestOptions.Outbounds, blockTag)
 				}
 			}
 			subscriptionGroups[it.Name] = append(subscriptionGroups[it.Name], groupOutboundPerSubscription)
@@ -238,14 +238,14 @@ func (t *Template) renderOutbounds(metadata M.Metadata, options *boxOption.Optio
 			groupOutbound.Options = &selectorOptions
 			selectorOptions.Outbounds = common.Uniq(append(selectorOptions.Outbounds, extraTags...))
 			if len(selectorOptions.Outbounds) == 0 {
-				continue
+				selectorOptions.Outbounds = append(selectorOptions.Outbounds, blockTag)
 			}
 		case C.TypeURLTest:
 			urltestOptions := common.PtrValueOrDefault(extraGroup.CustomURLTest)
 			groupOutbound.Options = &urltestOptions
 			urltestOptions.Outbounds = common.Uniq(append(urltestOptions.Outbounds, extraTags...))
 			if len(urltestOptions.Outbounds) == 0 {
-				continue
+				urltestOptions.Outbounds = append(urltestOptions.Outbounds, blockTag)
 			}
 		}
 		if extraGroup.Target == option.ExtraGroupTargetDefault {
