@@ -82,10 +82,41 @@ func (s *Server) render(writer http.ResponseWriter, request *http.Request) {
 		s.accessLog(request, http.StatusInternalServerError, len(err.Error()))
 		return
 	}
+
+	var result any = &options
+	overrides := request.URL.Query()["override[]"]
+	if len(overrides) > 0 {
+		var optionsAny any
+		optionsJSON, err := json.MarshalContext(s.ctx, options)
+		if err != nil {
+			s.logger.Error(E.Cause(err, "marshal options for override"))
+			render.Status(request, http.StatusInternalServerError)
+			render.PlainText(writer, request, err.Error())
+			s.accessLog(request, http.StatusInternalServerError, len(err.Error()))
+			return
+		}
+		err = json.Unmarshal(optionsJSON, &optionsAny)
+		if err != nil {
+			s.logger.Error(E.Cause(err, "unmarshal options for override"))
+			render.Status(request, http.StatusInternalServerError)
+			render.PlainText(writer, request, err.Error())
+			s.accessLog(request, http.StatusInternalServerError, len(err.Error()))
+			return
+		}
+		result, err = applyOverrides(optionsAny, overrides)
+		if err != nil {
+			s.logger.Error(E.Cause(err, "apply overrides"))
+			render.Status(request, http.StatusInternalServerError)
+			render.PlainText(writer, request, err.Error())
+			s.accessLog(request, http.StatusInternalServerError, len(err.Error()))
+			return
+		}
+	}
+
 	var buffer bytes.Buffer
 	encoder := json.NewEncoderContext(s.ctx, &buffer)
 	encoder.SetIndent("", "  ")
-	err = encoder.Encode(&options)
+	err = encoder.Encode(result)
 	if err != nil {
 		s.logger.Error(E.Cause(err, "marshal options"))
 		render.Status(request, http.StatusInternalServerError)
