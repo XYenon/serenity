@@ -1,9 +1,10 @@
 package server
 
 import (
-	"github.com/sagernet/sing/common/json"
+	"fmt"
 	"strings"
 
+	"github.com/sagernet/sing/common/json"
 	"github.com/theory/jsonpath"
 	"github.com/theory/jsonpath/spec"
 )
@@ -12,7 +13,7 @@ func applyOverrides(root any, overrides []string) (any, error) {
 	for _, override := range overrides {
 		parts := strings.SplitN(override, "=", 2)
 		if len(parts) != 2 {
-			continue
+			return nil, fmt.Errorf("invalid override format: %s", override)
 		}
 		pathStr := parts[0]
 		valueStr := parts[1]
@@ -30,15 +31,19 @@ func applyOverrides(root any, overrides []string) (any, error) {
 
 		locatedNodes := path.SelectLocated(root)
 		for _, node := range locatedNodes {
-			root = setNormalizedPath(root, node.Path, value)
+			var err error
+			root, err = setNormalizedPath(root, node.Path, value)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return root, nil
 }
 
-func setNormalizedPath(root any, path spec.NormalizedPath, value any) any {
+func setNormalizedPath(root any, path spec.NormalizedPath, value any) (any, error) {
 	if len(path) == 0 {
-		return value
+		return value, nil
 	}
 
 	selector := path[0]
@@ -48,28 +53,36 @@ func setNormalizedPath(root any, path spec.NormalizedPath, value any) any {
 	case spec.Name:
 		m, ok := root.(map[string]any)
 		if !ok {
-			return root
+			return root, fmt.Errorf("type mismatch: expected map for path segment %q, got %T", s, root)
 		}
 		name := string(s)
 		if len(remainingPath) == 0 {
 			m[name] = value
 		} else {
-			m[name] = setNormalizedPath(m[name], remainingPath, value)
+			newVal, err := setNormalizedPath(m[name], remainingPath, value)
+			if err != nil {
+				return root, err
+			}
+			m[name] = newVal
 		}
 	case spec.Index:
 		l, ok := root.([]any)
 		if !ok {
-			return root
+			return root, fmt.Errorf("type mismatch: expected slice for path segment %d, got %T", int(s), root)
 		}
 		index := int(s)
 		if index < 0 || index >= len(l) {
-			return root
+			return root, fmt.Errorf("index out of bounds: %d", index)
 		}
 		if len(remainingPath) == 0 {
 			l[index] = value
 		} else {
-			l[index] = setNormalizedPath(l[index], remainingPath, value)
+			newVal, err := setNormalizedPath(l[index], remainingPath, value)
+			if err != nil {
+				return root, err
+			}
+			l[index] = newVal
 		}
 	}
-	return root
+	return root, nil
 }

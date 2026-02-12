@@ -65,16 +65,16 @@ func TestApplyOverrides_Errors(t *testing.T) {
 	root := map[string]any{"a": 1}
 
 	// Invalid format (no =)
-	newRoot, err := applyOverrides(root, []string{"invalid"})
-	assert.NoError(t, err)
-	assert.Equal(t, root, newRoot)
+	_, err := applyOverrides(root, []string{"invalid"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid override format")
 
 	// Invalid JSONPath
 	_, err = applyOverrides(root, []string{"$[=value"})
 	assert.Error(t, err)
 
 	// Type mismatch: Index on map
-	newRoot, err = applyOverrides(root, []string{"$[0]=val"})
+	newRoot, err := applyOverrides(root, []string{"$[0]=val"})
 	assert.NoError(t, err)
 	assert.Equal(t, root, newRoot)
 

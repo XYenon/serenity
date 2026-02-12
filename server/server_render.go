@@ -106,9 +106,9 @@ func (s *Server) render(writer http.ResponseWriter, request *http.Request) {
 		result, err = applyOverrides(optionsAny, overrides)
 		if err != nil {
 			s.logger.Error(E.Cause(err, "apply overrides"))
-			render.Status(request, http.StatusInternalServerError)
+			render.Status(request, http.StatusBadRequest)
 			render.PlainText(writer, request, err.Error())
-			s.accessLog(request, http.StatusInternalServerError, len(err.Error()))
+			s.accessLog(request, http.StatusBadRequest, len(err.Error()))
 			return
 		}
 	}
