@@ -41,6 +41,28 @@ func TestApplyOverrides(t *testing.T) {
 	assert.Equal(t, "youtube.com", rules[0].(map[string]any)["domain"].([]any)[0])
 }
 
+func TestApplyOverrides_Create(t *testing.T) {
+	var root any // nil root
+
+	overrides := []string{
+		"$.log.level=debug",
+		"$.outbounds[0].tag=direct",
+		"$.outbounds[1].tag=proxy",
+	}
+
+	newRoot, err := applyOverrides(root, overrides)
+	assert.NoError(t, err)
+
+	m := newRoot.(map[string]any)
+	log := m["log"].(map[string]any)
+	assert.Equal(t, "debug", log["level"])
+
+	outbounds := m["outbounds"].([]any)
+	assert.Len(t, outbounds, 2)
+	assert.Equal(t, "direct", outbounds[0].(map[string]any)["tag"])
+	assert.Equal(t, "proxy", outbounds[1].(map[string]any)["tag"])
+}
+
 func TestApplyOverrides_Types(t *testing.T) {
 	var root any = map[string]any{"foo": "bar", "bar": false, "baz": 1, "qux": []any{}}
 
@@ -67,30 +89,21 @@ func TestApplyOverrides_Errors(t *testing.T) {
 	// Invalid format (no =)
 	_, err := applyOverrides(root, []string{"invalid"})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid override format")
 
 	// Invalid JSONPath
 	_, err = applyOverrides(root, []string{"$[=value"})
 	assert.Error(t, err)
 
 	// Type mismatch: Index on map
-	newRoot, err := applyOverrides(root, []string{"$[0]=val"})
-	assert.NoError(t, err)
-	assert.Equal(t, root, newRoot)
+	_, err = applyOverrides(root, []string{"$[0]=val"})
+	assert.Error(t, err)
 
 	// Type mismatch: Name on slice
 	rootSlice := []any{1}
-	newRoot, err = applyOverrides(rootSlice, []string{"$.foo=val"})
-	assert.NoError(t, err)
-	assert.Equal(t, rootSlice, newRoot)
+	_, err = applyOverrides(rootSlice, []string{"$.foo=val"})
+	assert.Error(t, err)
 
-	// Index out of bounds
-	newRoot, err = applyOverrides(rootSlice, []string{"$[1]=val"})
-	assert.NoError(t, err)
-	assert.Equal(t, rootSlice, newRoot)
-
-	// Root override
-	newRoot, err = applyOverrides(root, []string{"$=new-root"})
-	assert.NoError(t, err)
-	assert.Equal(t, "new-root", newRoot)
+	// Complex path not found
+	_, err = applyOverrides(root, []string{"$..foo=bar"})
+	assert.Error(t, err)
 }

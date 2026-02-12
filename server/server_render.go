@@ -133,7 +133,7 @@ func (s *Server) render(writer http.ResponseWriter, request *http.Request) {
 func (s *Server) RenderHeadless(profileName string, metadata metadata.Metadata) (*boxOption.Options, error) {
 	var profile *Profile
 	if profileName == "" {
-		s.profile.DefaultProfile()
+		profile = s.profile.DefaultProfile()
 	} else {
 		profile = s.profile.ProfileByName(profileName)
 	}
