@@ -41,6 +41,145 @@ func TestApplyOverrides(t *testing.T) {
 	assert.Equal(t, "youtube.com", rules[0].(map[string]any)["domain"].([]any)[0])
 }
 
+func TestApplyOverrides_FilterSelector(t *testing.T) {
+	rootJSON := `{
+		"inbounds": [
+			{"type": "tun", "tag": "tun-in"},
+			{"type": "mixed", "tag": "mixed-in", "listen_port": 8080},
+			{"type": "http", "tag": "http-in"}
+		]
+	}`
+	var root any
+	json.Unmarshal([]byte(rootJSON), &root)
+
+	// Test filter selector to modify existing property
+	// Note: JSONPath uses single quotes for string literals
+	overrides := []string{
+		`$.inbounds[?(@.type=='mixed')].listen_port=2081`,
+	}
+
+	newRoot, err := applyOverrides(root, overrides)
+	assert.NoError(t, err)
+	assert.NotNil(t, newRoot)
+
+	m := newRoot.(map[string]any)
+	inbounds := m["inbounds"].([]any)
+	// Only mixed inbound should have listen_port changed
+	assert.Equal(t, float64(2081), inbounds[1].(map[string]any)["listen_port"])
+	// Other inbounds should remain unchanged
+	assert.Nil(t, inbounds[0].(map[string]any)["listen_port"])
+	assert.Nil(t, inbounds[2].(map[string]any)["listen_port"])
+}
+
+func TestApplyOverrides_FilterSelectorCreateProperty(t *testing.T) {
+	rootJSON := `{
+		"inbounds": [
+			{"type": "tun", "tag": "tun-in"},
+			{"type": "mixed", "tag": "mixed-in"},
+			{"type": "http", "tag": "http-in"}
+		]
+	}`
+	var root any
+	json.Unmarshal([]byte(rootJSON), &root)
+
+	// Test filter selector to create new property
+	overrides := []string{
+		`$.inbounds[?(@.type=='mixed')].listen_port=2081`,
+	}
+
+	newRoot, err := applyOverrides(root, overrides)
+	assert.NoError(t, err)
+	assert.NotNil(t, newRoot)
+
+	m := newRoot.(map[string]any)
+	inbounds := m["inbounds"].([]any)
+	// Only mixed inbound should get the new listen_port
+	assert.Equal(t, float64(2081), inbounds[1].(map[string]any)["listen_port"])
+}
+
+func TestApplyOverrides_WildcardSelector(t *testing.T) {
+	rootJSON := `{
+		"inbounds": [
+			{"type": "mixed", "listen_port": 8080},
+			{"type": "mixed", "listen_port": 8081},
+			{"type": "http", "listen_port": 8082}
+		]
+	}`
+	var root any
+	json.Unmarshal([]byte(rootJSON), &root)
+
+	// Test wildcard selector - modify all listen_port values
+	overrides := []string{
+		"$.inbounds[*].listen_port=9090",
+	}
+
+	newRoot, err := applyOverrides(root, overrides)
+	assert.NoError(t, err)
+
+	m := newRoot.(map[string]any)
+	inbounds := m["inbounds"].([]any)
+	// All inbounds should have listen_port changed
+	for i := 0; i < 3; i++ {
+		assert.Equal(t, float64(9090), inbounds[i].(map[string]any)["listen_port"])
+	}
+}
+
+func TestApplyOverrides_SliceSelector(t *testing.T) {
+	rootJSON := `{
+		"inbounds": [
+			{"type": "tun"},
+			{"type": "mixed"},
+			{"type": "http"},
+			{"type": "socks"}
+		]
+	}`
+	var root any
+	json.Unmarshal([]byte(rootJSON), &root)
+
+	// Test slice selector - modify first 2 items
+	overrides := []string{
+		`$.inbounds[0:2].tag=modified`,
+	}
+
+	newRoot, err := applyOverrides(root, overrides)
+	assert.NoError(t, err)
+
+	m := newRoot.(map[string]any)
+	inbounds := m["inbounds"].([]any)
+	// First 2 inbounds should have tag
+	assert.Equal(t, "modified", inbounds[0].(map[string]any)["tag"])
+	assert.Equal(t, "modified", inbounds[1].(map[string]any)["tag"])
+	// Last 2 should not have tag
+	assert.Nil(t, inbounds[2].(map[string]any)["tag"])
+	assert.Nil(t, inbounds[3].(map[string]any)["tag"])
+}
+
+func TestApplyOverrides_MultipleSelectors(t *testing.T) {
+	rootJSON := `{
+		"inbounds": [
+			{"type": "mixed", "tag": "in1"},
+			{"type": "http", "tag": "in2"},
+			{"type": "mixed", "tag": "in3"}
+		]
+	}`
+	var root any
+	json.Unmarshal([]byte(rootJSON), &root)
+
+	// Test multiple selectors [0,2]
+	overrides := []string{
+		`$.inbounds[0,2].listen_port=3000`,
+	}
+
+	newRoot, err := applyOverrides(root, overrides)
+	assert.NoError(t, err)
+
+	m := newRoot.(map[string]any)
+	inbounds := m["inbounds"].([]any)
+	assert.Equal(t, float64(3000), inbounds[0].(map[string]any)["listen_port"])
+	assert.Nil(t, inbounds[1].(map[string]any)["listen_port"])
+	assert.Equal(t, float64(3000), inbounds[2].(map[string]any)["listen_port"])
+}
+
 func TestApplyOverrides_Create(t *testing.T) {
 	var root any // nil root
 
