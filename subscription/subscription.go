@@ -29,11 +29,13 @@ type Manager struct {
 
 type Subscription struct {
 	option.Subscription
-	rawServers  []boxOption.Outbound
-	processes   []*ProcessOptions
-	Servers     []boxOption.Outbound
-	LastUpdated time.Time
-	LastEtag    string
+	rawServers    []boxOption.Outbound
+	processes     []*ProcessOptions
+	requestHeader *RequestHeaderOptions
+	decrypt       *DecryptOptions
+	Servers       []boxOption.Outbound
+	LastUpdated   time.Time
+	LastEtag      string
 }
 
 func NewSubscriptionManager(ctx context.Context, logger logger.Logger, cacheFile *cachefile.CacheFile, rawSubscriptions []option.Subscription) (*Manager, error) {
@@ -44,6 +46,14 @@ func NewSubscriptionManager(ctx context.Context, logger logger.Logger, cacheFile
 	for index, subscription := range rawSubscriptions {
 		if subscription.Name == "" {
 			return nil, E.New("initialize subscription[", index, "]: missing name")
+		}
+		requestHeaderOptions, err := NewRequestHeaderOptions(subscription.RequestHeader)
+		if err != nil {
+			return nil, E.Cause(err, "initialize subscription[", subscription.Name, "]: parse request_header")
+		}
+		decryptOptions, err := NewDecryptOptions(subscription.Decrypt)
+		if err != nil {
+			return nil, E.Cause(err, "initialize subscription[", subscription.Name, "]: parse decrypt")
 		}
 		var processes []*ProcessOptions
 		if interval == 0 || time.Duration(subscription.UpdateInterval) < interval {
@@ -57,8 +67,10 @@ func NewSubscriptionManager(ctx context.Context, logger logger.Logger, cacheFile
 			processes = append(processes, processOptions)
 		}
 		subscriptions = append(subscriptions, &Subscription{
-			Subscription: subscription,
-			processes:    processes,
+			Subscription:  subscription,
+			processes:     processes,
+			requestHeader: requestHeaderOptions,
+			decrypt:       decryptOptions,
 		})
 	}
 	if interval == 0 {
@@ -153,6 +165,7 @@ func (m *Manager) update(subscription *Subscription) error {
 	if err != nil {
 		return err
 	}
+	applyRequestHeaders(request.Header, subscription.requestHeader)
 	if subscription.UserAgent != "" {
 		request.Header.Set("User-Agent", subscription.UserAgent)
 	} else {
@@ -165,6 +178,7 @@ func (m *Manager) update(subscription *Subscription) error {
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 	switch response.StatusCode {
 	case http.StatusOK:
 	case http.StatusNotModified:
@@ -184,15 +198,16 @@ func (m *Manager) update(subscription *Subscription) error {
 	}
 	content, err := io.ReadAll(response.Body)
 	if err != nil {
-		response.Body.Close()
 		return err
+	}
+	content, err = maybeDecryptSubscriptionContent(response.Header, content, subscription.decrypt)
+	if err != nil {
+		return E.Cause(err, "decode subscription content")
 	}
 	rawServers, err := parser.ParseSubscription(m.ctx, string(content))
 	if err != nil {
-		response.Body.Close()
 		return err
 	}
-	response.Body.Close()
 	subscription.rawServers = rawServers
 	m.processSubscription(subscription, true)
 	eTagHeader := response.Header.Get("Etag")

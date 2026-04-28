@@ -51,6 +51,8 @@ type Subscription struct {
 	Name             string                                     `json:"name,omitempty"`
 	URL              string                                     `json:"url,omitempty"`
 	UserAgent        string                                     `json:"user_agent,omitempty"`
+	RequestHeader    *badjson.TypedMap[string, string]          `json:"request_header,omitempty"`
+	Decrypt          *SubscriptionDecryptOptions                `json:"decrypt,omitempty"`
 	UpdateInterval   badoption.Duration                         `json:"update_interval,omitempty"`
 	Process          badoption.Listable[OutboundProcessOptions] `json:"process,omitempty"`
 	DeDuplication    bool                                       `json:"deduplication,omitempty"`
@@ -59,6 +61,12 @@ type Subscription struct {
 	URLTestTagSuffix string                                     `json:"urltest_suffix,omitempty"`
 	CustomSelector   *option.SelectorOutboundOptions            `json:"custom_selector,omitempty"`
 	CustomURLTest    *option.URLTestOutboundOptions             `json:"custom_urltest,omitempty"`
+}
+
+type SubscriptionDecryptOptions struct {
+	Key                 string `json:"key,omitempty"`
+	ResponseHeader      string `json:"response_header,omitempty"`
+	ResponseHeaderValue string `json:"response_header_value,omitempty"`
 }
 
 type OutboundProcessOptions struct {

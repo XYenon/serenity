@@ -2,6 +2,11 @@
 icon: material/alert-decagram
 ---
 
+#### Unreleased
+
+* Add `subscription.decrypt` for responses marked with `x-flclash-encrypted: 1`
+* Add `subscription.request_header` for custom subscription request headers
+
 #### 1.1.0-beta.3
 
 * Rename `template.servers` to `template.dns_servers`
