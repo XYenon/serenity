@@ -157,7 +157,7 @@ func (s *Server) Start() error {
 		if err != nil {
 			return err
 		}
-		stdConfig, err := s.tlsConfig.Config()
+		stdConfig, err := s.tlsConfig.STDConfig()
 		if err != nil {
 			return err
 		}
