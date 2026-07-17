@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"time"
@@ -17,14 +18,15 @@ import (
 )
 
 type Manager struct {
-	ctx            context.Context
-	cancel         context.CancelFunc
-	logger         logger.Logger
-	cacheFile      *cachefile.CacheFile
-	subscriptions  []*Subscription
-	updateInterval time.Duration
-	updateTicker   *time.Ticker
-	httpClient     http.Client
+	ctx                context.Context
+	cancel             context.CancelFunc
+	logger             logger.Logger
+	cacheFile          *cachefile.CacheFile
+	subscriptions      []*Subscription
+	updateInterval     time.Duration
+	updateTicker       *time.Ticker
+	httpClient         http.Client
+	insecureHttpClient http.Client
 }
 
 type Subscription struct {
@@ -77,13 +79,16 @@ func NewSubscriptionManager(ctx context.Context, logger logger.Logger, cacheFile
 		interval = option.DefaultSubscriptionUpdateInterval
 	}
 	ctx, cancel := context.WithCancel(ctx)
+	insecureTransport := http.DefaultTransport.(*http.Transport).Clone()
+	insecureTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	return &Manager{
-		ctx:            ctx,
-		cancel:         cancel,
-		logger:         logger,
-		cacheFile:      cacheFile,
-		subscriptions:  subscriptions,
-		updateInterval: interval,
+		ctx:                ctx,
+		cancel:             cancel,
+		logger:             logger,
+		cacheFile:          cacheFile,
+		subscriptions:      subscriptions,
+		updateInterval:     interval,
+		insecureHttpClient: http.Client{Transport: insecureTransport},
 	}, nil
 }
 
@@ -174,7 +179,12 @@ func (m *Manager) update(subscription *Subscription) error {
 	if subscription.LastEtag != "" {
 		request.Header.Set("If-None-Match", subscription.LastEtag)
 	}
-	response, err := m.httpClient.Do(request.WithContext(m.ctx))
+	var response *http.Response
+	if subscription.Insecure {
+		response, err = m.insecureHttpClient.Do(request.WithContext(m.ctx))
+	} else {
+		response, err = m.httpClient.Do(request.WithContext(m.ctx))
+	}
 	if err != nil {
 		return err
 	}

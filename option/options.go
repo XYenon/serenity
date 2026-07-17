@@ -53,6 +53,7 @@ type Subscription struct {
 	UserAgent        string                                     `json:"user_agent,omitempty"`
 	RequestHeader    *badjson.TypedMap[string, string]          `json:"request_header,omitempty"`
 	Decrypt          *SubscriptionDecryptOptions                `json:"decrypt,omitempty"`
+	Insecure         bool                                       `json:"insecure,omitempty"`
 	UpdateInterval   badoption.Duration                         `json:"update_interval,omitempty"`
 	Process          badoption.Listable[OutboundProcessOptions] `json:"process,omitempty"`
 	DeDuplication    bool                                       `json:"deduplication,omitempty"`
