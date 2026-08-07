@@ -123,6 +123,39 @@ func ParseClashSubscription(_ context.Context, content string) ([]option.Outboun
 				Transport: clashTransport(vmessOption.Network, vmessOption.HTTPOpts, vmessOption.HTTP2Opts, vmessOption.GrpcOpts, vmessOption.WSOpts),
 				Network:   clashNetworks(vmessOption.UDP),
 			}
+		case constant.Vless:
+			vlessOption := &clash_outbound.VlessOption{}
+			err = decoder.Decode(proxyMapping, vlessOption)
+			if err != nil {
+				return nil, err
+			}
+			echOptions, err := clashECH(vlessOption.ECHOpts)
+			if err != nil {
+				return nil, E.Cause(err, "parse ECH options for proxy ", i)
+			}
+			outbound.Type = C.TypeVLESS
+			outbound.Options = &option.VLESSOutboundOptions{
+				ServerOptions: option.ServerOptions{
+					Server:     vlessOption.Server,
+					ServerPort: uint16(vlessOption.Port),
+				},
+				UUID: vlessOption.UUID,
+				Flow: vlessOption.Flow,
+				OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{
+					TLS: &option.OutboundTLSOptions{
+						Enabled:    vlessOption.TLS,
+						ALPN:       vlessOption.ALPN,
+						ServerName: vlessOption.ServerName,
+						Insecure:   vlessOption.SkipCertVerify,
+						ECH:        echOptions,
+						UTLS:       clashUTLS(vlessOption.ClientFingerprint),
+						Reality:    clashReality(vlessOption.RealityOpts),
+					},
+				},
+				Transport:      clashTransport(vlessOption.Network, vlessOption.HTTPOpts, vlessOption.HTTP2Opts, vlessOption.GrpcOpts, vlessOption.WSOpts),
+				Network:        clashNetworks(vlessOption.UDP),
+				PacketEncoding: clashVLESSPacketEncoding(vlessOption),
+			}
 		case constant.Socks5:
 			socks5Option := &clash_outbound.Socks5Option{}
 			err = decoder.Decode(proxyMapping, socks5Option)
@@ -355,4 +388,29 @@ func clashUTLS(fingerprint string) *option.OutboundUTLSOptions {
 		Enabled:     true,
 		Fingerprint: fingerprint,
 	}
+}
+
+func clashReality(reality clash_outbound.RealityOptions) *option.OutboundRealityOptions {
+	if reality.PublicKey == "" {
+		return nil
+	}
+	return &option.OutboundRealityOptions{
+		Enabled:   true,
+		PublicKey: reality.PublicKey,
+		ShortID:   reality.ShortID,
+	}
+}
+
+func clashVLESSPacketEncoding(vlessOption *clash_outbound.VlessOption) *string {
+	packetEncoding := vlessOption.PacketEncoding
+	if packetEncoding == "" {
+		if vlessOption.PacketAddr {
+			packetEncoding = "packetaddr"
+		} else if vlessOption.XUDP {
+			packetEncoding = "xudp"
+		} else {
+			return nil
+		}
+	}
+	return &packetEncoding
 }
