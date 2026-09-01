@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly GO_VERSION="1.25.0"
+readonly GO_SHA256="2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613"
+readonly GO_ROOT="$HOME/.local/go${GO_VERSION}"
+
+log() {
+  printf '[serenity setup] %s\n' "$*"
+}
+
+install_system_packages() {
+  local packages=()
+
+  command -v curl >/dev/null 2>&1 || packages+=(curl)
+  command -v tar >/dev/null 2>&1 || packages+=(tar)
+  command -v sha256sum >/dev/null 2>&1 || packages+=(coreutils)
+
+  if ((${#packages[@]} == 0)); then
+    return
+  fi
+
+  log "installing system packages: ${packages[*]}"
+  if [[ $(id -u) == 0 ]]; then
+    apt-get update
+    apt-get install -y "${packages[@]}"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo apt-get install -y "${packages[@]}"
+  else
+    printf 'Cannot install required system packages without root or sudo.\n' >&2
+    exit 1
+  fi
+}
+
+install_go() {
+  if [[ -x "$GO_ROOT/bin/go" ]] && [[ $("$GO_ROOT/bin/go" version) == "go version go${GO_VERSION} linux/"* ]]; then
+    log "Go ${GO_VERSION} is already installed"
+    return
+  fi
+
+  log "installing Go ${GO_VERSION}"
+  local temp_dir archive
+  temp_dir=$(mktemp -d)
+  archive="$temp_dir/go.tar.gz"
+
+  curl --fail --location --retry 3 --output "$archive" \
+    "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+  printf '%s  %s\n' "$GO_SHA256" "$archive" | sha256sum --check --status
+  tar -C "$temp_dir" -xzf "$archive"
+
+  mkdir -p "$(dirname "$GO_ROOT")"
+  rm -rf "$GO_ROOT"
+  mv "$temp_dir/go" "$GO_ROOT"
+  rm -rf "$temp_dir"
+}
+
+configure_shell() {
+  local marker="# serenity Go toolchain"
+
+  if ! grep -Fqx "$marker" "$HOME/.bash_profile" 2>/dev/null; then
+    log "configuring Go for login shells"
+    cat >> "$HOME/.bash_profile" <<'EOF'
+
+# serenity Go toolchain
+if [[ -d "$HOME/.local/go1.25.0/bin" ]]; then
+  export PATH="$HOME/.local/go1.25.0/bin:$PATH"
+fi
+EOF
+  fi
+}
+
+main() {
+  local started
+
+  started=$SECONDS
+  install_system_packages
+  log "system prerequisites checked in $((SECONDS - started))s"
+
+  started=$SECONDS
+  install_go
+  log "Go toolchain ready in $((SECONDS - started))s"
+
+  started=$SECONDS
+  configure_shell
+  log "login shell configured in $((SECONDS - started))s"
+
+  export PATH="$GO_ROOT/bin:$PATH"
+  log "downloading Go module dependencies"
+  started=$SECONDS
+  go mod download
+  go mod verify
+  log "module dependencies ready in $((SECONDS - started))s"
+  log "setup complete: $(go version)"
+}
+
+main "$@"
