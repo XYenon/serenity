@@ -54,7 +54,7 @@ func TestFilter1100(t *testing.T) {
 			RuleSet: []option.RuleSet{
 				{
 					Type: C.RuleSetTypeInline,
-					Tag:  "test",
+					Tag:  []string{"test"},
 					InlineOptions: option.PlainRuleSet{
 						Rules: []option.HeadlessRule{
 							{

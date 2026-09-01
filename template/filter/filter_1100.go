@@ -139,11 +139,13 @@ func expandInlineRule(ruleSet option.RuleSet, rule option.Rule) ([]option.Rule, 
 		rule.LogicalOptions.Rules = newRules
 		return []option.Rule{rule}, nil
 	}
-	if !common.Contains(rule.DefaultOptions.RuleSet, ruleSet.Tag) {
+	if !common.Any(rule.DefaultOptions.RuleSet, func(it string) bool {
+		return common.Contains(ruleSet.Tag, it)
+	}) {
 		return []option.Rule{rule}, nil
 	}
 	rule.DefaultOptions.RuleSet = common.Filter(rule.DefaultOptions.RuleSet, func(it string) bool {
-		return it != ruleSet.Tag
+		return !common.Contains(ruleSet.Tag, it)
 	})
 	for i, hRule := range ruleSet.InlineOptions.Rules {
 		var (
@@ -179,11 +181,13 @@ func expandInlineDNSRule(ruleSet option.RuleSet, rule option.DNSRule) ([]option.
 		rule.LogicalOptions.Rules = newRules
 		return []option.DNSRule{rule}, nil
 	}
-	if !common.Contains(rule.DefaultOptions.RuleSet, ruleSet.Tag) {
+	if !common.Any(rule.DefaultOptions.RuleSet, func(it string) bool {
+		return common.Contains(ruleSet.Tag, it)
+	}) {
 		return []option.DNSRule{rule}, nil
 	}
 	rule.DefaultOptions.RuleSet = common.Filter(rule.DefaultOptions.RuleSet, func(it string) bool {
-		return it != ruleSet.Tag
+		return !common.Contains(ruleSet.Tag, it)
 	})
 	for i, hRule := range ruleSet.InlineOptions.Rules {
 		var (

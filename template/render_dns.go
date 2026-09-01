@@ -9,30 +9,30 @@ import (
 	"github.com/sagernet/serenity/common/semver"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-dns"
 	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json/badoption"
 	BM "github.com/sagernet/sing/common/metadata"
 
 	mDNS "github.com/miekg/dns"
 )
 
-func (t *Template) renderDNS(ctx context.Context, metadata M.Metadata, options *option.Options) error {
+func (t *Template) renderDNS(_ context.Context, metadata M.Metadata, options *option.Options) error {
 	var (
 		domainStrategy      option.DomainStrategy
 		domainStrategyLocal option.DomainStrategy
 	)
-	if t.DomainStrategy != option.DomainStrategy(dns.DomainStrategyAsIS) {
+	if t.DomainStrategy != option.DomainStrategy(C.DomainStrategyAsIS) {
 		domainStrategy = t.DomainStrategy
 	} else if t.EnableFakeIP {
-		domainStrategy = option.DomainStrategy(dns.DomainStrategyPreferIPv4)
+		domainStrategy = option.DomainStrategy(C.DomainStrategyPreferIPv4)
 	} else {
-		domainStrategy = option.DomainStrategy(dns.DomainStrategyUseIPv4)
+		domainStrategy = option.DomainStrategy(C.DomainStrategyIPv4Only)
 	}
-	if t.DomainStrategyLocal != option.DomainStrategy(dns.DomainStrategyAsIS) {
+	if t.DomainStrategyLocal != option.DomainStrategy(C.DomainStrategyAsIS) {
 		domainStrategyLocal = t.DomainStrategyLocal
 	} else {
-		domainStrategyLocal = option.DomainStrategy(dns.DomainStrategyPreferIPv4)
+		domainStrategyLocal = option.DomainStrategy(C.DomainStrategyPreferIPv4)
 	}
 	if domainStrategyLocal == domainStrategy {
 		domainStrategyLocal = 0
@@ -54,52 +54,27 @@ func (t *Template) renderDNS(ctx context.Context, metadata M.Metadata, options *
 	if dnsLocal == "" {
 		dnsLocal = DefaultDNSLocal
 	}
-	directTag := t.DirectTag
-	if directTag == "" {
-		directTag = DefaultDirectTag
-	}
 	defaultTag := t.DefaultTag
 	if defaultTag == "" {
 		defaultTag = DefaultDefaultTag
 	}
-	newDNSServers := metadata.Version != nil && metadata.Version.GreaterThanOrEqual(semver.ParseVersion("1.12.0-alpha.1"))
-	defaultDNSOptions := option.DNSServerOptions{
-		Tag: DNSDefaultTag,
-		Options: &option.LegacyDNSServerOptions{
-			Address: dnsDefault,
-		},
-	}
+	defaultDNSResolver := ""
 	if dnsDefaultUrl, err := url.Parse(dnsDefault); err == nil && BM.IsDomainName(dnsDefaultUrl.Hostname()) {
-		defaultDNSOptions.Options.(*option.LegacyDNSServerOptions).AddressResolver = DNSLocalTag
+		defaultDNSResolver = DNSLocalTag
 	}
-	if newDNSServers {
-		defaultDNSOptions.Options.(*option.LegacyDNSServerOptions).Detour = defaultTag
-		defaultDNSOptions.Upgrade(ctx)
+	defaultDNSOptions, err := createDNSServerOptions(dnsDefault, DNSDefaultTag, defaultTag, defaultDNSResolver)
+	if err != nil {
+		return E.Cause(err, "create default DNS server")
 	}
 	options.DNS.Servers = append(options.DNS.Servers, defaultDNSOptions)
 	var (
-		localDNSOptions  option.DNSServerOptions
 		localDNSIsDomain bool
+		localDNSAddress  string
 	)
 	if t.DisableTrafficBypass {
-		localDNSOptions = option.DNSServerOptions{
-			Tag:  DNSLocalTag,
-			Type: C.DNSTypeLegacy,
-			Options: &option.LegacyDNSServerOptions{
-				Address:  "local",
-				Strategy: domainStrategyLocal,
-			},
-		}
+		localDNSAddress = "local"
 	} else {
-		localDNSOptions = option.DNSServerOptions{
-			Tag:  DNSLocalTag,
-			Type: C.DNSTypeLegacy,
-			Options: &option.LegacyDNSServerOptions{
-				Address:  dnsLocal,
-				Detour:   directTag,
-				Strategy: domainStrategyLocal,
-			},
-		}
+		localDNSAddress = dnsLocal
 		if BM.IsDomainName(dnsLocal) {
 			localDNSIsDomain = true
 		} else if dnsLocalUrl, err := url.Parse(dnsLocal); err == nil {
@@ -109,93 +84,44 @@ func (t *Template) renderDNS(ctx context.Context, metadata M.Metadata, options *
 			}
 		}
 		if localDNSIsDomain {
-			defaultDNSOptions.Options.(*option.LegacyDNSServerOptions).AddressResolver = DNSLocalSetupTag
+			defaultDNSOptions, err = createDNSServerOptions(dnsDefault, DNSDefaultTag, defaultTag, DNSLocalSetupTag)
+			if err != nil {
+				return E.Cause(err, "create default DNS server")
+			}
+			options.DNS.Servers[len(options.DNS.Servers)-1] = defaultDNSOptions
 		}
 	}
-	if newDNSServers {
-		localDNSOptions.Options.(*option.LegacyDNSServerOptions).Detour = ""
-		localDNSOptions.Upgrade(ctx)
+	localDNSOptions, err := createDNSServerOptions(localDNSAddress, DNSLocalTag, "", "")
+	if err != nil {
+		return E.Cause(err, "create local DNS server")
 	}
 	options.DNS.Servers = append(options.DNS.Servers, localDNSOptions)
 	if localDNSIsDomain {
-		if newDNSServers {
-			options.DNS.Servers = append(options.DNS.Servers, option.DNSServerOptions{
-				Type:    C.DNSTypeLocal,
-				Tag:     DNSLocalSetupTag,
-				Options: &option.LocalDNSServerOptions{},
-			})
-		} else {
-			options.DNS.Servers = append(options.DNS.Servers, option.DNSServerOptions{
-				Type: C.DNSTypeLegacy,
-				Tag:  DNSLocalSetupTag,
-				Options: &option.LegacyDNSServerOptions{
-					Address:  "local",
-					Strategy: domainStrategyLocal,
-				},
-			})
-		}
+		options.DNS.Servers = append(options.DNS.Servers, option.DNSServerOptions{
+			Type:    C.DNSTypeLocal,
+			Tag:     DNSLocalSetupTag,
+			Options: &option.LocalDNSServerOptions{},
+		})
 	}
 	if t.EnableFakeIP {
-		if newDNSServers {
-			var inet4Range, inet6Range *badoption.Prefix
-			if t.CustomFakeIP != nil {
-				inet4Range = t.CustomFakeIP.Inet4Range
-				inet6Range = t.CustomFakeIP.Inet6Range
-			} else {
-				inet4Range = (*badoption.Prefix)(common.Ptr(netip.MustParsePrefix("198.18.0.0/15")))
-				inet6Range = (*badoption.Prefix)(common.Ptr(netip.MustParsePrefix("fc00::/18")))
-			}
-			options.DNS.Servers = append(options.DNS.Servers, option.DNSServerOptions{
-				Tag:  DNSFakeIPTag,
-				Type: C.DNSTypeFakeIP,
-				Options: &option.FakeIPDNSServerOptions{
-					Inet4Range: inet4Range,
-					Inet6Range: inet6Range,
-				},
-			})
+		var inet4Range, inet6Range *badoption.Prefix
+		if t.CustomFakeIP != nil {
+			inet4Range = t.CustomFakeIP.Inet4Range
+			inet6Range = t.CustomFakeIP.Inet6Range
 		} else {
-			if t.CustomFakeIP != nil {
-				options.DNS.FakeIP = &option.LegacyDNSFakeIPOptions{
-					Inet4Range: t.CustomFakeIP.Inet4Range,
-					Inet6Range: t.CustomFakeIP.Inet6Range,
-				}
-			} else if options.DNS.FakeIP == nil {
-				options.DNS.FakeIP = &option.LegacyDNSFakeIPOptions{}
-			}
-			options.DNS.FakeIP.Enabled = true
-			if options.DNS.FakeIP.Inet4Range == nil || !options.DNS.FakeIP.Inet4Range.Build(netip.Prefix{}).IsValid() {
-				options.DNS.FakeIP.Inet4Range = (*badoption.Prefix)(common.Ptr(netip.MustParsePrefix("198.18.0.0/15")))
-			}
-			if !t.DisableIPv6() && options.DNS.FakeIP.Inet6Range == nil || !options.DNS.FakeIP.Inet6Range.Build(netip.Prefix{}).IsValid() {
-				options.DNS.FakeIP.Inet6Range = (*badoption.Prefix)(common.Ptr(netip.MustParsePrefix("fc00::/18")))
-			}
-			options.DNS.Servers = append(options.DNS.Servers, option.DNSServerOptions{
-				Tag: DNSFakeIPTag,
-				Options: &option.LegacyDNSServerOptions{
-					Address: "fakeip",
-				},
-			})
+			inet4Range = (*badoption.Prefix)(common.Ptr(netip.MustParsePrefix("198.18.0.0/15")))
+			inet6Range = (*badoption.Prefix)(common.Ptr(netip.MustParsePrefix("fc00::/18")))
 		}
+		options.DNS.Servers = append(options.DNS.Servers, option.DNSServerOptions{
+			Tag:  DNSFakeIPTag,
+			Type: C.DNSTypeFakeIP,
+			Options: &option.FakeIPDNSServerOptions{
+				Inet4Range: inet4Range,
+				Inet6Range: inet6Range,
+			},
+		})
 	}
 	options.DNS.Servers = append(options.DNS.Servers, t.DNSServers...)
-	if !newDNSServers {
-		options.DNS.Rules = []option.DNSRule{
-			{
-				Type: C.RuleTypeDefault,
-				DefaultOptions: option.DefaultDNSRule{
-					RawDefaultDNSRule: option.RawDefaultDNSRule{
-						Outbound: []string{"any"},
-					},
-					DNSRuleAction: option.DNSRuleAction{
-						Action: C.RuleActionTypeRoute,
-						RouteOptions: option.DNSRouteActionOptions{
-							Server: DNSLocalTag,
-						},
-					},
-				},
-			},
-		}
-	}
 	clashModeRule := t.ClashModeRule
 	if clashModeRule == "" {
 		clashModeRule = "Rule"
@@ -233,6 +159,9 @@ func (t *Template) renderDNS(ctx context.Context, metadata M.Metadata, options *
 					Action: C.RuleActionTypeRoute,
 					RouteOptions: option.DNSRouteActionOptions{
 						Server: DNSLocalTag,
+						AbstractDNSRouteActionOptions: option.AbstractDNSRouteActionOptions{
+							Strategy: domainStrategyLocal,
+						},
 					},
 				},
 			},
@@ -251,6 +180,9 @@ func (t *Template) renderDNS(ctx context.Context, metadata M.Metadata, options *
 						Action: C.RuleActionTypeRoute,
 						RouteOptions: option.DNSRouteActionOptions{
 							Server: DNSLocalTag,
+							AbstractDNSRouteActionOptions: option.AbstractDNSRouteActionOptions{
+								Strategy: domainStrategyLocal,
+							},
 						},
 					},
 				},
@@ -298,6 +230,9 @@ func (t *Template) renderDNS(ctx context.Context, metadata M.Metadata, options *
 							Action: C.RuleActionTypeRoute,
 							RouteOptions: option.DNSRouteActionOptions{
 								Server: DNSLocalTag,
+								AbstractDNSRouteActionOptions: option.AbstractDNSRouteActionOptions{
+									Strategy: domainStrategyLocal,
+								},
 							},
 						},
 					},
@@ -327,4 +262,75 @@ func (t *Template) renderDNS(ctx context.Context, metadata M.Metadata, options *
 		})
 	}
 	return nil
+}
+
+func createDNSServerOptions(address string, tag string, detour string, resolver string) (option.DNSServerOptions, error) {
+	serverURL, err := url.Parse(address)
+	if err != nil {
+		return option.DNSServerOptions{}, err
+	}
+	serverType := serverURL.Scheme
+	if serverType == "" {
+		if address == C.DNSTypeLocal {
+			serverType = C.DNSTypeLocal
+		} else {
+			serverType = C.DNSTypeUDP
+		}
+	}
+	if serverType == C.DNSTypeLocal {
+		return option.DNSServerOptions{
+			Type:    C.DNSTypeLocal,
+			Tag:     tag,
+			Options: &option.LocalDNSServerOptions{},
+		}, nil
+	}
+	serverAddress := address
+	if serverURL.Scheme != "" {
+		serverAddress = serverURL.Host
+	}
+	serverAddr := BM.ParseSocksaddr(serverAddress)
+	if !serverAddr.IsValid() {
+		return option.DNSServerOptions{}, E.New("invalid server address: ", address)
+	}
+	dialerOptions := option.DialerOptions{Detour: detour}
+	if resolver != "" {
+		dialerOptions.DomainResolver = &option.DomainResolveOptions{Server: resolver}
+	}
+	remoteOptions := option.RemoteDNSServerOptions{
+		RawLocalDNSServerOptions: option.RawLocalDNSServerOptions{DialerOptions: dialerOptions},
+		DNSServerAddressOptions: option.DNSServerAddressOptions{
+			Server: serverAddr.AddrString(),
+		},
+	}
+	defaultPort := uint16(53)
+	switch serverType {
+	case C.DNSTypeUDP, C.DNSTypeTCP:
+	case C.DNSTypeTLS, C.DNSTypeQUIC:
+		defaultPort = 853
+	case C.DNSTypeHTTPS, C.DNSTypeHTTP3:
+		defaultPort = 443
+	default:
+		return option.DNSServerOptions{}, E.New("unsupported DNS server scheme: ", serverType)
+	}
+	if serverAddr.Port != 0 && serverAddr.Port != defaultPort {
+		remoteOptions.ServerPort = serverAddr.Port
+	}
+	var serverOptions any = &remoteOptions
+	switch serverType {
+	case C.DNSTypeTLS, C.DNSTypeQUIC:
+		serverOptions = &option.RemoteTLSDNSServerOptions{RemoteDNSServerOptions: remoteOptions}
+	case C.DNSTypeHTTPS, C.DNSTypeHTTP3:
+		httpsOptions := &option.RemoteHTTPSDNSServerOptions{
+			RemoteTLSDNSServerOptions: option.RemoteTLSDNSServerOptions{RemoteDNSServerOptions: remoteOptions},
+		}
+		if serverURL.Path != "/dns-query" {
+			httpsOptions.Path = serverURL.Path
+		}
+		serverOptions = httpsOptions
+	}
+	return option.DNSServerOptions{
+		Type:    serverType,
+		Tag:     tag,
+		Options: serverOptions,
+	}, nil
 }

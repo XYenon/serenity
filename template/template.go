@@ -44,6 +44,10 @@ type ExtraGroup struct {
 func (t *Template) Render(ctx context.Context, metadata M.Metadata, profileName string, endpoints []boxOption.Endpoint, outbounds [][]boxOption.Outbound, subscriptions []*subscription.Subscription) (*boxOption.Options, error) {
 	var options boxOption.Options
 	options.Log = t.Log
+	if metadata.Version == nil || metadata.Version.GreaterThanOrEqual(semver.ParseVersion("1.14.0")) {
+		options.HTTPClients = t.HTTPClients
+		options.Services = t.Services
+	}
 	if metadata.Version != nil && metadata.Version.GreaterThanOrEqual(semver.ParseVersion("1.12.0-alpha.1")) {
 		options.Endpoints = endpoints
 	}

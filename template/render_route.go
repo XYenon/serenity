@@ -15,6 +15,10 @@ func (t *Template) renderRoute(metadata M.Metadata, options *option.Options) err
 			RuleSet: t.renderRuleSet(t.CustomRuleSet),
 		}
 	}
+	if metadata.Version == nil || metadata.Version.GreaterThanOrEqual(semver.ParseVersion("1.14.0")) {
+		options.Route.FindNeighbor = t.FindNeighbor
+		options.Route.DefaultHTTPClient = t.DefaultHTTPClient
+	}
 	if !t.DisableTrafficBypass {
 		t.renderGeoResources(metadata, options)
 	}

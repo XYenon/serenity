@@ -8,7 +8,6 @@ import (
 	"github.com/sagernet/serenity/common/semver"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-dns"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json/badjson"
@@ -19,10 +18,10 @@ func (t *Template) renderInbounds(metadata M.Metadata, options *option.Options) 
 	options.Inbounds = t.Inbounds
 	var domainStrategy option.DomainStrategy
 	if !t.RemoteResolve {
-		if t.DomainStrategy != option.DomainStrategy(dns.DomainStrategyAsIS) {
+		if t.DomainStrategy != option.DomainStrategy(C.DomainStrategyAsIS) {
 			domainStrategy = t.DomainStrategy
 		} else {
-			domainStrategy = option.DomainStrategy(dns.DomainStrategyPreferIPv4)
+			domainStrategy = option.DomainStrategy(C.DomainStrategyPreferIPv4)
 		}
 	}
 	disableRuleAction := t.DisableRuleAction || (metadata.Version != nil && metadata.Version.LessThan(semver.ParseVersion("1.11.0-alpha.7")))

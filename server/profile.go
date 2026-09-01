@@ -5,7 +5,6 @@ import (
 	"regexp"
 
 	"github.com/sagernet/serenity/common/metadata"
-	"github.com/sagernet/serenity/common/semver"
 	"github.com/sagernet/serenity/option"
 	"github.com/sagernet/serenity/subscription"
 	"github.com/sagernet/serenity/template"
@@ -156,9 +155,6 @@ func (p *Profile) Render(metadata metadata.Metadata) (*boxOption.Options, error)
 		subscriptions = append(subscriptions, subscription)
 	}
 	ctx := p.manager.ctx
-	if metadata.Version == nil || metadata.Version.LessThan(semver.ParseVersion("1.12.0-alpha.1")) {
-		ctx = boxOption.ContextWithDontUpgrade(ctx)
-	}
 	options, err := selectedTemplate.Render(ctx, metadata, p.Name, endpoints, outbounds, subscriptions)
 	if err != nil {
 		return nil, err

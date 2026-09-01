@@ -4,8 +4,8 @@ import (
 	"context"
 
 	C "github.com/sagernet/serenity/constant"
+	boxConstant "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-dns"
 	"github.com/sagernet/sing/common/byteformats"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
@@ -21,6 +21,8 @@ type _Template struct {
 	// Global
 
 	Log                  *option.LogOptions    `json:"log,omitempty"`
+	HTTPClients          []option.HTTPClient   `json:"http_clients,omitempty"`
+	Services             []option.Service      `json:"services,omitempty"`
 	DomainStrategy       option.DomainStrategy `json:"domain_strategy,omitempty"`
 	DomainStrategyLocal  option.DomainStrategy `json:"domain_strategy_local,omitempty"`
 	DisableTrafficBypass bool                  `json:"disable_traffic_bypass,omitempty"`
@@ -61,6 +63,8 @@ type _Template struct {
 	StartRules          []option.Rule `json:"start_rules,omitempty"`
 	PreRules            []option.Rule `json:"pre_rules,omitempty"`
 	CustomRules         []option.Rule `json:"custom_rules,omitempty"`
+	FindNeighbor        bool          `json:"find_neighbor,omitempty"`
+	DefaultHTTPClient   string        `json:"default_http_client,omitempty"`
 	EnableJSDelivr      bool          `json:"enable_jsdelivr,omitempty"`
 	CustomRuleSet       []RuleSet     `json:"custom_rule_set,omitempty"`
 	PostRuleSet         []RuleSet     `json:"post_rule_set,omitempty"`
@@ -132,7 +136,7 @@ type GitHubRuleSetOptions struct {
 }
 
 func (t Template) DisableIPv6() bool {
-	return t.DomainStrategy == option.DomainStrategy(dns.DomainStrategyUseIPv4) && t.DomainStrategyLocal == option.DomainStrategy(dns.DomainStrategyUseIPv4)
+	return t.DomainStrategy == option.DomainStrategy(boxConstant.DomainStrategyIPv4Only) && t.DomainStrategyLocal == option.DomainStrategy(boxConstant.DomainStrategyIPv4Only)
 }
 
 type ExtraGroup struct {

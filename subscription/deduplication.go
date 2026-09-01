@@ -5,27 +5,37 @@ import (
 	"net/netip"
 	"sync"
 
+	"github.com/sagernet/sing-box/adapter"
+	boxTLS "github.com/sagernet/sing-box/common/tls"
+	C "github.com/sagernet/sing-box/constant"
+	boxDNS "github.com/sagernet/sing-box/dns"
+	dnsTransport "github.com/sagernet/sing-box/dns/transport"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
-	dns "github.com/sagernet/sing-dns"
 	"github.com/sagernet/sing/common"
+	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/task"
 )
 
 func Deduplication(ctx context.Context, servers []option.Outbound) []option.Outbound {
+	logger := log.NewNOPFactory().Logger()
+	tlsConfig := common.Must1(boxTLS.NewClient(ctx, logger, "1.1.1.1", option.OutboundTLSOptions{Enabled: true}))
 	resolveCtx := &resolveContext{
 		ctx: ctx,
-		dnsClient: dns.NewClient(dns.ClientOptions{
+		dnsClient: boxDNS.NewClient(boxDNS.ClientOptions{
+			Context:       ctx,
 			DisableExpire: true,
-			Logger:        log.NewNOPFactory().Logger(),
+			ClientSubnet:  netip.MustParsePrefix("114.114.114.114/24"),
+			Logger:        logger,
 		}),
-		dnsTransport: common.Must1(dns.NewTLSTransport(dns.TransportOptions{
-			Context:      ctx,
-			Dialer:       N.SystemDialer,
-			Address:      "tls://1.1.1.1",
-			ClientSubnet: netip.MustParsePrefix("114.114.114.114/24"),
-		})),
+		dnsTransport: dnsTransport.NewTLSRaw(
+			logger,
+			boxDNS.NewTransportAdapter(C.DNSTypeTLS, "", nil),
+			N.SystemDialer,
+			M.ParseSocksaddr("1.1.1.1:853"),
+			tlsConfig,
+		),
 	}
 
 	uniqueServers := make([]netip.AddrPort, len(servers))
@@ -65,8 +75,8 @@ func Deduplication(ctx context.Context, servers []option.Outbound) []option.Outb
 
 type resolveContext struct {
 	ctx          context.Context
-	dnsClient    *dns.Client
-	dnsTransport dns.Transport
+	dnsClient    *boxDNS.Client
+	dnsTransport adapter.DNSTransport
 }
 
 func resolveDestination(ctx *resolveContext, server option.Outbound) netip.AddrPort {
@@ -79,9 +89,9 @@ func resolveDestination(ctx *resolveContext, server option.Outbound) netip.AddrP
 		return serverOptions.AddrPort()
 	}
 	if serverOptions.IsFqdn() {
-		addresses, lookupErr := ctx.dnsClient.Lookup(ctx.ctx, ctx.dnsTransport, serverOptions.Fqdn, dns.QueryOptions{
-			Strategy: dns.DomainStrategyPreferIPv4,
-		})
+		addresses, lookupErr := ctx.dnsClient.Lookup(ctx.ctx, ctx.dnsTransport, serverOptions.Fqdn, adapter.DNSQueryOptions{
+			Strategy: C.DomainStrategyPreferIPv4,
+		}, nil)
 		if lookupErr == nil && len(addresses) > 0 {
 			return netip.AddrPortFrom(addresses[0], serverOptions.Port)
 		}

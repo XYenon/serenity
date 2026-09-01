@@ -30,7 +30,7 @@ func (t *Template) renderGeoResources(metadata M.Metadata, options *boxOption.Op
 		options.Route.RuleSet = []boxOption.RuleSet{
 			{
 				Type:   C.RuleSetTypeRemote,
-				Tag:    "geoip-cn",
+				Tag:    []string{"geoip-cn"},
 				Format: C.RuleSetFormatBinary,
 				RemoteOptions: boxOption.RemoteRuleSet{
 					URL:            downloadURL + "SagerNet/sing-geoip" + branchSplit + "rule-set/geoip-cn.srs",
@@ -39,7 +39,7 @@ func (t *Template) renderGeoResources(metadata M.Metadata, options *boxOption.Op
 			},
 			{
 				Type:   C.RuleSetTypeRemote,
-				Tag:    "geosite-geolocation-cn",
+				Tag:    []string{"geosite-geolocation-cn"},
 				Format: C.RuleSetFormatBinary,
 				RemoteOptions: boxOption.RemoteRuleSet{
 					URL:            downloadURL + "SagerNet/sing-geosite" + branchSplit + "rule-set/geosite-geolocation-cn.srs",
@@ -48,7 +48,7 @@ func (t *Template) renderGeoResources(metadata M.Metadata, options *boxOption.Op
 			},
 			{
 				Type:   C.RuleSetTypeRemote,
-				Tag:    "geosite-geolocation-!cn",
+				Tag:    []string{"geosite-geolocation-!cn"},
 				Format: C.RuleSetFormatBinary,
 				RemoteOptions: boxOption.RemoteRuleSet{
 					URL:            downloadURL + "SagerNet/sing-geosite" + branchSplit + "rule-set/geosite-geolocation-!cn.srs",
@@ -85,7 +85,7 @@ func (t *Template) renderRuleSet(ruleSets []option.RuleSet) []boxOption.RuleSet 
 			for _, code := range ruleSet.GitHubOptions.RuleSet {
 				result = append(result, boxOption.RuleSet{
 					Type:   C.RuleSetTypeRemote,
-					Tag:    ruleSet.GitHubOptions.Prefix + code,
+					Tag:    []string{ruleSet.GitHubOptions.Prefix + code},
 					Format: C.RuleSetFormatBinary,
 					RemoteOptions: boxOption.RemoteRuleSet{
 						URL: downloadURL +

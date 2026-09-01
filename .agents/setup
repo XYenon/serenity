@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly GO_VERSION="1.25.0"
-readonly GO_SHA256="2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613"
+readonly GO_VERSION="1.26.5"
+readonly GO_SHA256="5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053"
 readonly GO_ROOT="$HOME/.local/go${GO_VERSION}"
 
 log() {
@@ -58,16 +58,21 @@ install_go() {
 configure_shell() {
   local marker="# serenity Go toolchain"
 
-  if ! grep -Fqx "$marker" "$HOME/.bash_profile" 2>/dev/null; then
-    log "configuring Go for login shells"
-    cat >> "$HOME/.bash_profile" <<'EOF'
+  if grep -Fqx "$marker" "$HOME/.bash_profile" 2>/dev/null; then
+    if grep -Fqx "if [[ -d \"\$HOME/.local/go${GO_VERSION}/bin\" ]]; then" "$HOME/.bash_profile"; then
+      return
+    fi
+    sed -i "/^${marker}$/,/^fi$/d" "$HOME/.bash_profile"
+  fi
+
+  log "configuring Go for login shells"
+  cat >> "$HOME/.bash_profile" <<'EOF'
 
 # serenity Go toolchain
-if [[ -d "$HOME/.local/go1.25.0/bin" ]]; then
-  export PATH="$HOME/.local/go1.25.0/bin:$PATH"
+if [[ -d "$HOME/.local/go1.26.5/bin" ]]; then
+  export PATH="$HOME/.local/go1.26.5/bin:$PATH"
 fi
 EOF
-  fi
 }
 
 main() {

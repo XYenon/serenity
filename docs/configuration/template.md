@@ -8,6 +8,8 @@
   // Global
 
   "log": {},
+  "http_clients": [],
+  "services": [],
   "domain_strategy": "",
   "domain_strategy_local": "",
   "disable_traffic_bypass": false,
@@ -59,6 +61,8 @@
 
   "pre_rules": [],
   "custom_rules": [],
+  "find_neighbor": false,
+  "default_http_client": "",
   "enable_jsdelivr": false,
   "custom_geoip": {},
   "custom_geosite": {},
@@ -96,6 +100,18 @@ Extend from another profile.
 #### log
 
 Log configuration, see [Log](https://sing-box.sagernet.org/configuration/log/).
+
+#### http_clients
+
+List of reusable [HTTP clients](https://sing-box.sagernet.org/configuration/shared/http-client/).
+
+Only generated for sing-box 1.14.0 and later.
+
+#### services
+
+List of [services](https://sing-box.sagernet.org/configuration/service/).
+
+Only generated for sing-box 1.14.0 and later.
 
 #### domain_strategy
 
@@ -277,6 +293,18 @@ Will be applied before traffic bypassing rules.
 List of [Rule](https://sing-box.sagernet.org/configuration/route/rule/).
 
 No default traffic bypassing rules will be generated if not empty.
+
+#### find_neighbor
+
+Enable neighbor resolution for route and DNS rules.
+
+Only generated for sing-box 1.14.0 and later.
+
+#### default_http_client
+
+Default HTTP client tag for remote rule sets.
+
+Only generated for sing-box 1.14.0 and later.
 
 #### enable_jsdelivr
 
